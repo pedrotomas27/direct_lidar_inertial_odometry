@@ -11,24 +11,118 @@
 -->
 
 <launch>
-
+  <!-- Define parâmetros globais -->
+  <param name="use_sim_time" value="true" />
   <arg name="robot_namespace" default="robot"/>
-  <arg name="rviz" default="false"/>
+  
 
+  <!-- Argumentos adicionais -->
   <arg name="pointcloud_topic" default="lidar"/>
   <arg name="imu_topic" default="imu"/>
 
-  <!-- DLIO Odometry Node -->
+  <!-- Nós de transformação estática -->
+  <node pkg="tf" type="static_transform_publisher" name="lidar_0_broadcaster" args="0.15 0 0.13 0 0 0 base lidar_0 0.1" />
+  <node pkg="tf" type="static_transform_publisher" name="rslidar_broadcaster" args="0.15 0 0.13 0 0.309017 0 base rslidar 0.1" />
+  <node pkg="tf" type="static_transform_publisher" name="camera_link_broadcaster" args="0.16 0 0.06 0 0 0 base camera_link 0.1" />
+
+  <!-- Nós de executáveis Python -->
+  <node pkg="python_executables" type="Unitree_tranformer.py" name="Unitree_tranformer" output="screen" />
+  <node pkg="python_executables" type="imu_filter.py" name="imu_filter" output="screen" />
+  <!-- <node pkg="python_executables" type="aldra.py" name="aldra" output="screen" /> -->
+  <node pkg="python_executables" type="navtogps.py" name="navtogps" output="screen" />
+
+  <!-- Nós de utilitários geodésicos -->
+  <node pkg="geodetic_utils" type="gps_to_pose_conversion_node" name="gps_to_pose_conversion_node" output="screen" />
+  <node pkg="geodetic_utils" type="set_gps_reference_node" name="set_gps_reference_node" output="screen" />
+
+  <!-- Nó de Filtro IMU Madgwick -->
+  <node pkg="imu_filter_madgwick" type="imu_filter_node" name="imu_filter_madgwick" output="screen">
+    <param name="use_mag" value="false"/>
+    <param name="publish_tf" value="false"/>
+    <param name="world_frame" value="enu"/>
+    <param name="base_link_frame" value="base"/>
+    <remap from="imu/data_raw" to="/filtered_imu_data"/>
+    <remap from="imu/data" to="/madgwick_filtered_imu"/>
+  </node>
+
+  <!-- Nó de Odometria DLIO -->
   <node ns="$(arg robot_namespace)" name="dlio_odom" pkg="direct_lidar_inertial_odometry" type="dlio_odom_node" output="screen" clear_params="true">
+    <!-- Carregar parâmetros -->
+    <rosparam param="dlio/frames/odom">odom</rosparam>
+    <rosparam param="dlio/frames/baselink">base</rosparam>
+    <rosparam param="dlio/frames/lidar">lidar_0</rosparam>
+    <!-- <rosparam param="dlio/frames/lidar">rslidar</rosparam> -->
+    <rosparam param="dlio/frames/imu">imu_link</rosparam>
+    
+    <rosparam param="dlio/map/waitUntilMove">true</rosparam>
+    <rosparam param="dlio/map/dense/filtered">false</rosparam>
+    <rosparam param="dlio/map/sparse/leafSize">0.25</rosparam>
+    
+    <rosparam param="dlio/odom/gravity">9.80665</rosparam>
+    <rosparam param="dlio/odom/computeTimeOffset">true</rosparam>
+    
+    <rosparam param="dlio/odom/imu/approximateGravity">true</rosparam>
+    <rosparam param="dlio/odom/imu/calibration/gyro">true</rosparam>
+    <rosparam param="dlio/odom/imu/calibration/accel">true</rosparam>
+    <rosparam param="dlio/odom/imu/calibration/time">3</rosparam>
+    <rosparam param="dlio/odom/imu/bufferSize">5000</rosparam>
+    
+    <rosparam param="dlio/odom/preprocessing/cropBoxFilter/size">1.0</rosparam>
+    <rosparam param="dlio/odom/preprocessing/voxelFilter/res">0.25</rosparam>
+    
+    <rosparam param="dlio/odom/keyframe/threshD">1.0</rosparam>
+    <rosparam param="dlio/odom/keyframe/threshR">45.0</rosparam>
+    
+    <rosparam param="dlio/odom/submap/keyframe/knn">10</rosparam>
+    <rosparam param="dlio/odom/submap/keyframe/kcv">10</rosparam>
+    <rosparam param="dlio/odom/submap/keyframe/kcc">10</rosparam>
+    
+    <rosparam param="dlio/odom/gicp/minNumPoints">32</rosparam>
+    <rosparam param="dlio/odom/gicp/kCorrespondences">16</rosparam>
+    <rosparam param="dlio/odom/gicp/maxCorrespondenceDistance">0.5</rosparam>
+    <rosparam param="dlio/odom/gicp/maxIterations">10</rosparam>
+    <rosparam param="dlio/odom/gicp/transformationEpsilon">0.01</rosparam>
+    <rosparam param="dlio/odom/gicp/rotationEpsilon">0.01</rosparam>
+    <rosparam param="dlio/odom/gicp/initLambdaFactor">1e-9</rosparam>
+    
+    <rosparam param="dlio/odom/geo/Kp">4.5</rosparam>
+    <rosparam param="dlio/odom/geo/Kv">11.25</rosparam>
+    <rosparam param="dlio/odom/geo/Kq">4.0</rosparam>
+    <rosparam param="dlio/odom/geo/Kab">2.25</rosparam>
+    <rosparam param="dlio/odom/geo/Kgb">1.0</rosparam>
+    <rosparam param="dlio/odom/geo/abias_max">5.0</rosparam>
+    <rosparam param="dlio/odom/geo/gbias_max">0.5</rosparam>
 
-    <!-- Load parameters -->
-    <rosparam file="$(find direct_lidar_inertial_odometry)/cfg/dlio.yaml" command="load"/>
-    <rosparam file="$(find direct_lidar_inertial_odometry)/cfg/params.yaml" command="load"/>
+    <!-- Novos parâmetros DLIO -->
+    <rosparam param="dlio/version">1.1.1</rosparam>
+    <rosparam param="dlio/adaptive">true</rosparam>
 
+    <rosparam param="dlio/pointcloud/deskew">true</rosparam>
+    <rosparam param="dlio/pointcloud/voxelize">true</rosparam>
+
+    <rosparam param="dlio/imu/calibration">true</rosparam>
+    <rosparam param="dlio/imu/intrinsics/accel/bias">[0.0, 0.0, 0.0]</rosparam>
+    <rosparam param="dlio/imu/intrinsics/accel/sm">[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]</rosparam>
+    <rosparam param="dlio/imu/intrinsics/gyro/bias">[0.0, 0.0, 0.0]</rosparam>
+
+    <!-- Bpearl: -->
+    <!-- <rosparam param="dlio/extrinsics/baselink2imu/t">[-0.01592, -0.06659, -0.00617]</rosparam>
+    <rosparam param="dlio/extrinsics/baselink2imu/R">[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]</rosparam>
+    <rosparam param="dlio/extrinsics/baselink2lidar/t">[0.15, 0.0, 0.13]</rosparam>
+    <rosparam param="dlio/extrinsics/baselink2lidar/R">[0.9526330, 0.0000000, -0.3041224, 0.0000000, 1.0000000, 0.0000000, 0.3041224, 0.0000000, 0.9526330]</rosparam> -->
+    
+
+
+    <!-- Velarray: -->
+    <rosparam param="dlio/extrinsics/baselink2imu/t">[-0.01592, -0.06659, -0.00617]</rosparam>
+    <rosparam param="dlio/extrinsics/baselink2imu/R">[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]</rosparam>
+    <rosparam param="dlio/extrinsics/baselink2lidar/t">[0.15, 0.0, 0.13]</rosparam>
+    <rosparam param="dlio/extrinsics/baselink2lidar/R">[1, 0.0000000, 0, 0.0000000, 1, 0.0000000, 0.0, 0.0000000, 1]</rosparam>
     <!-- Subscriptions -->
-    <remap from="~pointcloud" to="$(arg pointcloud_topic)"/>
-    <remap from="~imu" to="$(arg imu_topic)"/>
-
+    <!-- <remap from="~pointcloud" to="/rslidar_points"/> -->
+    <remap from="~pointcloud" to="/lidar_0/m1600/pcl2"/>
+    <remap from="~imu" to="/filtered_imu_data"/>
+    
     <!-- Publications -->
     <remap from="~odom"     to="dlio/odom_node/odom"/>
     <remap from="~pose"     to="dlio/odom_node/pose"/>
@@ -36,25 +130,20 @@
     <remap from="~kf_pose"  to="dlio/odom_node/keyframes"/>
     <remap from="~kf_cloud" to="dlio/odom_node/pointcloud/keyframe"/>
     <remap from="~deskewed" to="dlio/odom_node/pointcloud/deskewed"/>
-
   </node>
 
-  <!-- DLIO Mapping Node -->
+  <!-- Nó de Mapeamento DLIO -->
   <node ns="$(arg robot_namespace)" name="dlio_map" pkg="direct_lidar_inertial_odometry" type="dlio_map_node" output="screen" clear_params="true">
-
-    <!-- Load parameters -->
-    <rosparam file="$(find direct_lidar_inertial_odometry)/cfg/dlio.yaml" command="load"/>
-    <rosparam file="$(find direct_lidar_inertial_odometry)/cfg/params.yaml" command="load"/>
+    <!-- Carregar parâmetros -->
+    <!-- Assumindo que os parâmetros estão sendo carregados via rosparam acima para evitar duplicidade -->
 
     <!-- Subscriptions -->
     <remap from="~keyframes" to="dlio/odom_node/pointcloud/keyframe"/>
 
     <!-- Publications -->
     <remap from="~map" to="dlio/map_node/map"/>
-
   </node>
-
   <!-- RViz -->
-  <node pkg="rviz" type="rviz" name="dlio_rviz" args="-d $(find direct_lidar_inertial_odometry)/launch/dlio.rviz" if="$(arg rviz)"/>
+  <node pkg="rviz" type="rviz" name="dlio_rviz" args="-d $(find direct_lidar_inertial_odometry)/launch/dlio.rviz" />
 
 </launch>

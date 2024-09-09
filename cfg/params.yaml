@@ -14,9 +14,9 @@ dlio:
 
   frames:
     odom: odom
-    baselink: base_link
-    lidar: lidar
-    imu: imu
+    baselink: base
+    lidar: rslidar
+    imu: imu_link
 
   map:
     waitUntilMove: true
